@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+  issues: write
+
 jobs:
   ipa:
     runs-on: macos-14
@@ -19,11 +23,11 @@ jobs:
           xcode-select -p
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: brew install xcodegen 2>&1 | tee xcodegen-brew.log
 
       - name: Generate Xcode project
         working-directory: ios
-        run: xcodegen generate
+        run: xcodegen generate 2>&1 | tee xcodegen.log
 
       - name: Build unsigned app
         working-directory: ios
@@ -36,7 +40,7 @@ jobs:
             -sdk iphoneos \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee build.log
 
       - name: Package ipa
         working-directory: ios
@@ -53,6 +57,34 @@ jobs:
           name: shijuan-gongfang-unsigned-ipa
           path: ios/试卷工坊-unsigned.ipa
           if-no-files-found: error
+
+      - name: Report failure to issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          body=/tmp/ci-body.md
+          {
+            echo "提交：${{ github.sha }}"
+            echo "事件：${{ github.event_name }}"
+            echo
+            echo '### xcodegen-brew 尾部'
+            echo '```'
+            tail -n 60 xcodegen-brew.log 2>/dev/null
+            echo '```'
+            echo '### xcodegen 尾部'
+            echo '```'
+            tail -n 80 ios/xcodegen.log 2>/dev/null
+            echo '```'
+            echo '### xcodebuild 尾部'
+            echo '```'
+            tail -n 300 ios/build.log 2>/dev/null
+            echo '```'
+          } > "$body"
+          gh issue create --repo "${{ github.repository }}" \
+            --title "CI 失败 ${{ github.sha }}" \
+            --body-file "$body"
 
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
