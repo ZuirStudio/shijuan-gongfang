@@ -86,6 +86,16 @@ jobs:
             --title "CI 失败 ${{ github.sha }}" \
             --body-file "$body"
 
+      - name: Report success to issue
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set +e
+          gh issue create --repo "${{ github.repository }}" \
+            --title "CI 成功 ${{ github.sha }}" \
+            --body "macOS 构建通过，ipa 见本次 run 的 artifact：shijuan-gongfang-unsigned-ipa"
+
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
