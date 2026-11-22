@@ -51,7 +51,8 @@ struct APIClient {
     static func health() async throws -> Bool {
         guard let u = url("/api/health") else { throw APIError.badURL }
         let data = try await send(URLRequest(url: u))
-        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["ok"] as? Bool ?? false
+        struct Health: Decodable { let ok: Bool? }
+        return (try? JSONDecoder().decode(Health.self, from: data))?.ok ?? false
     }
 
     // MARK: 任务列表

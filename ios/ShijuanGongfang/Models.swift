@@ -50,7 +50,7 @@ struct ExamMeta: Codable, Equatable {
 }
 
 /// output 里混有 "names" 这类字典值，这里只挑出字符串键值，避免整体解码失败
-struct StringMap: Decodable {
+struct StringMap: Decodable, Hashable {
     var values: [String: String] = [:]
 
     private struct Key: CodingKey {
