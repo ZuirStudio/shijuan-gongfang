@@ -57,9 +57,15 @@ struct JobDetailView: View {
                         .tint(.accentColor)
                 }
 
-                Text(job.statusText + (job.errorText == nil ? "" : "\n" + (job.errorText ?? "")))
+                Text(job.statusText)
                     .font(.footnote)
-                    .foregroundStyle(job.errorText == nil ? .secondary : .red)
+                    .foregroundStyle(.secondary)
+
+                if let error = job.errorText {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(Color.red)
+                }
 
                 HStack(spacing: 8) {
                     Image(systemName: "lock.shield")
@@ -150,9 +156,6 @@ struct JobDetailView: View {
                             QuestionRow(jobID: job.id, question: question)
                         }
                         .buttonStyle(.plain)
-                        if question.id != job.questions.last?.id {
-                            Divider().opacity(0.4)
-                        }
                     }
                 }
             }
