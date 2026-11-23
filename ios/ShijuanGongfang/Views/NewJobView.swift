@@ -22,68 +22,106 @@ struct NewJobView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("试卷文件") {
-                    Button {
-                        showImporter = true
-                    } label: {
-                        Label("从「文件」选择 PDF / DOC / DOCX", systemImage: "doc.badge.plus")
-                    }
-
-                    PhotosPicker(selection: $photoItems, maxSelectionCount: 12, matching: .images) {
-                        Label("从相册选择照片（可多选）", systemImage: "photo.on.rectangle.angled")
-                    }
-
-                    ForEach(pickedFiles) { f in
-                        HStack {
-                            Image(systemName: f.mime == "application/pdf" ? "doc.richtext" : "photo")
-                            Text(f.name).font(.footnote).lineLimit(1)
-                            Spacer()
-                            Text("\(f.data.count / 1024) KB").font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
-                    .onDelete { idx in pickedFiles.remove(atOffsets: idx) }
-                }
-
-                Section("试卷信息（用于命名与排版）") {
-                    TextField("学年，如 2026-2027学年", text: $meta.xuenian)
-                    TextField("省/直辖市，如 天津市", text: $meta.sheng)
-                    TextField("地级市，如 天津市", text: $meta.shi)
-                    TextField("区县，如 南开区", text: $meta.qu)
-                    TextField("学校（可空）", text: $meta.school)
-                    Picker("年级", selection: $meta.nianji) {
-                        ForEach(["七年级", "八年级", "九年级", "高一", "高二", "高三"], id: \.self) { Text($0) }
-                    }
-                    Picker("学期", selection: $meta.xueqi) {
-                        ForEach(["上学期", "下学期"], id: \.self) { Text($0) }
-                    }
-                    Picker("类型", selection: $meta.leixing) {
-                        ForEach(["月考", "期中", "期末", "一模", "二模", "模拟", "单元测试"], id: \.self) { Text($0) }
-                    }
-                    Picker("学科", selection: $meta.xueke) {
-                        ForEach(["语文", "数学", "英语", "物理", "化学", "生物", "政治", "历史", "地理"], id: \.self) { Text($0) }
-                    }
-                    HStack {
-                        Text("预览名称").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Text(meta.previewName + ".pdf").font(.caption2).lineLimit(2).multilineTextAlignment(.trailing)
-                    }
-                }
+                fileSection
+                metaSection
             }
             .navigationTitle("新建任务")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(uploading ? "上传中…" : "开始") { Task { await upload() } }
-                        .disabled(pickedFiles.isEmpty || uploading)
-                }
-            }
-            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.pdf, .word97, .data]) { result in
+            .toolbar { toolbarContent }
+            .fileImporter(isPresented: $showImporter, allowedContentTypes: allowedTypes) { result in
                 handleImport(result)
             }
             .onChange(of: photoItems) { _, items in
                 Task { await loadPhotos(items) }
             }
+        }
+    }
+
+    private var allowedTypes: [UTType] {
+        [UTType.pdf, UTType.word97, UTType.data]
+    }
+
+    @ViewBuilder
+    private var fileSection: some View {
+        Section("试卷文件") {
+            Button {
+                showImporter = true
+            } label: {
+                Label("从「文件」选择 PDF / DOC / DOCX", systemImage: "doc.badge.plus")
+            }
+
+            PhotosPicker(selection: $photoItems, maxSelectionCount: 12, matching: .images) {
+                Label("从相册选择照片（可多选）", systemImage: "photo.on.rectangle.angled")
+            }
+
+            ForEach(pickedFiles) { f in
+                fileRow(f)
+            }
+            .onDelete { idx in pickedFiles.remove(atOffsets: idx) }
+        }
+    }
+
+    @ViewBuilder
+    private func fileRow(_ f: PickedFile) -> some View {
+        let isPDF = (f.mime == "application/pdf")
+        let icon = isPDF ? "doc.richtext" : "photo"
+        let size = "\(f.data.count / 1024) KB"
+        HStack {
+            Image(systemName: icon)
+            Text(f.name).font(.footnote).lineLimit(1)
+            Spacer()
+            Text(size).font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var metaSection: some View {
+        Section("试卷信息（用于命名与排版）") {
+            TextField("学年，如 2026-2027学年", text: $meta.xuenian)
+            TextField("省/直辖市，如 天津市", text: $meta.sheng)
+            TextField("地级市，如 天津市", text: $meta.shi)
+            TextField("区县，如 南开区", text: $meta.qu)
+            TextField("学校（可空）", text: $meta.school)
+            Picker("年级", selection: $meta.nianji) {
+                ForEach(nianjiList, id: \.self) { Text($0) }
+            }
+            Picker("学期", selection: $meta.xueqi) {
+                ForEach(xueqiList, id: \.self) { Text($0) }
+            }
+            Picker("类型", selection: $meta.leixing) {
+                ForEach(leixingList, id: \.self) { Text($0) }
+            }
+            Picker("学科", selection: $meta.xueke) {
+                ForEach(xuekeList, id: \.self) { Text($0) }
+            }
+            previewRow
+        }
+    }
+
+    private var nianjiList: [String] { ["七年级", "八年级", "九年级", "高一", "高二", "高三"] }
+    private var xueqiList: [String] { ["上学期", "下学期"] }
+    private var leixingList: [String] { ["月考", "期中", "期末", "一模", "二模", "模拟", "单元测试"] }
+    private var xuekeList: [String] { ["语文", "数学", "英语", "物理", "化学", "生物", "政治", "历史", "地理"] }
+
+    @ViewBuilder
+    private var previewRow: some View {
+        HStack {
+            Text("预览名称").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Text(meta.previewName + ".pdf").font(.caption2).lineLimit(2).multilineTextAlignment(.trailing)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .cancellationAction) {
+            Button("取消") { dismiss() }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+            Button(uploading ? "上传中…" : "开始") {
+                Task { await upload() }
+            }
+            .disabled(pickedFiles.isEmpty || uploading)
         }
     }
 
