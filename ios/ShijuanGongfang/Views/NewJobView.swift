@@ -38,7 +38,7 @@ struct NewJobView: View {
     }
 
     private var allowedTypes: [UTType] {
-        [UTType.pdf, UTType.word97, UTType.data]
+        [UTType.pdf, UTType.data]
     }
 
     @ViewBuilder
