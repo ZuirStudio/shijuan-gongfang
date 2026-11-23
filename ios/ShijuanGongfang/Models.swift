@@ -141,7 +141,7 @@ struct JobProgress: Codable {
 
 // MARK: - 任务
 
-struct JobSummary: Codable, Identifiable, Hashable {
+struct JobSummary: Decodable, Identifiable, Hashable {
     let id: String
     let created: String?
     let stage: String?
@@ -150,7 +150,7 @@ struct JobSummary: Codable, Identifiable, Hashable {
     let output: StringMap?
 }
 
-struct JobDetail: Codable {
+struct JobDetail: Decodable {
     let id: String
     var stage: String
     var progress: JobProgress?
