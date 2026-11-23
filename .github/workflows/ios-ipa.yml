@@ -13,15 +13,15 @@ permissions:
 
 jobs:
   ipa:
-    runs-on: macos-13
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v4
 
       - name: Show toolchain
         run: |
-          xcodebuild -version
-          xcode-select -p
+          sw_vers
           uname -m
+          xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen 2>&1 | tee xcodegen-brew.log
@@ -50,6 +50,7 @@ jobs:
           echo "app: $APP"
           mkdir -p Payload
           cp -R "$APP" Payload/
+          rm -rf Payload/*.app/_CodeSignature
           zip -qry 试卷工坊-unsigned.ipa Payload
           ls -lh 试卷工坊-unsigned.ipa
 
@@ -62,7 +63,6 @@ jobs:
       - name: Publish CI log to branch
         if: always()
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JOB_STATUS: ${{ job.status }}
         run: |
           set +e
