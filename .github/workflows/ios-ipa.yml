@@ -15,22 +15,35 @@ jobs:
   ipa:
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        id: checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
 
       - name: Show toolchain
+        id: toolchain
+        continue-on-error: true
         run: |
+          set -x
           sw_vers
           uname -m
           xcodebuild -version
+          xcode-select -p
 
       - name: Install XcodeGen
+        id: brewx
+        continue-on-error: true
         run: brew install xcodegen 2>&1 | tee xcodegen-brew.log
 
       - name: Generate Xcode project
+        id: gen
+        continue-on-error: true
         working-directory: ios
         run: xcodegen generate 2>&1 | tee xcodegen.log
 
       - name: Build unsigned app
+        id: build
+        continue-on-error: true
         working-directory: ios
         run: |
           set -o pipefail
@@ -44,43 +57,80 @@ jobs:
             build 2>&1 | tee build.log
 
       - name: Package ipa
+        id: pack
+        continue-on-error: true
         working-directory: ios
         run: |
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
           echo "app: $APP"
+          test -n "$APP"
+          rm -rf Payload
           mkdir -p Payload
           cp -R "$APP" Payload/
           rm -rf Payload/*.app/_CodeSignature
+          rm -f 试卷工坊-unsigned.ipa
           zip -qry 试卷工坊-unsigned.ipa Payload
           ls -lh 试卷工坊-unsigned.ipa
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload artifact
+        id: art
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
         with:
           name: shijuan-gongfang-unsigned-ipa
           path: ios/试卷工坊-unsigned.ipa
-          if-no-files-found: error
+          if-no-files-found: warn
 
       - name: Publish CI log to branch
+        id: publish
         if: always()
-        env:
-          JOB_STATUS: ${{ job.status }}
         run: |
           set +e
           mkdir -p ci-logs
-          echo "$JOB_STATUS" > ci-logs/status.txt
+          {
+            echo "run_id=${{ github.run_id }}"
+            echo "commit=${{ github.sha }}"
+            echo "time=$(date -u +%FT%TZ)"
+            echo "checkout=${{ steps.checkout.outcome }}"
+            echo "toolchain=${{ steps.toolchain.outcome }}"
+            echo "brew_xcodegen=${{ steps.brewx.outcome }}"
+            echo "xcodegen=${{ steps.gen.outcome }}"
+            echo "build=${{ steps.build.outcome }}"
+            echo "package=${{ steps.pack.outcome }}"
+            echo "artifact=${{ steps.art.outcome }}"
+          } > ci-logs/status.txt
           cp xcodegen-brew.log ci-logs/ 2>/dev/null
           cp ios/xcodegen.log ci-logs/ 2>/dev/null
           cp ios/build.log ci-logs/ 2>/dev/null
           cp ios/试卷工坊-unsigned.ipa ci-logs/ 2>/dev/null
+          ls -la ci-logs
           git config user.name "ci-bot"
           git config user.email "ci@local"
-          git checkout -b ci-logs
-          git add -f ci-logs
-          git commit -m "ci log $JOB_STATUS" || true
-          git push -f origin ci-logs
+          git checkout -B ci-logs
+          git add -A -f ci-logs
+          git commit -m "ci log run ${{ github.run_id }}" || true
+          git push -f origin HEAD:refs/heads/ci-logs
+
+      - name: Fail job if any step failed
+        if: always()
+        env:
+          S_CHECKOUT: ${{ steps.checkout.outcome }}
+          S_TOOLCHAIN: ${{ steps.toolchain.outcome }}
+          S_BREW: ${{ steps.brewx.outcome }}
+          S_GEN: ${{ steps.gen.outcome }}
+          S_BUILD: ${{ steps.build.outcome }}
+          S_PACK: ${{ steps.pack.outcome }}
+          S_ART: ${{ steps.art.outcome }}
+        run: |
+          fail=0
+          for v in "$S_CHECKOUT" "$S_TOOLCHAIN" "$S_BREW" "$S_GEN" "$S_BUILD" "$S_PACK" "$S_ART"; do
+            if [ "$v" != "success" ]; then fail=1; echo "step outcome: $v"; fi
+          done
+          exit $fail
 
       - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/v')
+        continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
           files: ios/试卷工坊-unsigned.ipa
