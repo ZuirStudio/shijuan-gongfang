@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   ipa:
-    runs-on: macos-14
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v4
 
@@ -21,6 +21,7 @@ jobs:
         run: |
           xcodebuild -version
           xcode-select -p
+          uname -m
 
       - name: Install XcodeGen
         run: brew install xcodegen 2>&1 | tee xcodegen-brew.log
@@ -75,7 +76,7 @@ jobs:
           git config user.email "ci@local"
           git checkout -b ci-logs
           git add -f ci-logs
-          git commit -m "ci log $JOB_STATUS"
+          git commit -m "ci log $JOB_STATUS" || true
           git push -f origin ci-logs
 
       - name: Attach to release
