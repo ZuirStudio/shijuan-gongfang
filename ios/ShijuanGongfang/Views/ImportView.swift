@@ -15,6 +15,7 @@ struct ImportView: View {
     @State private var picked: [Picked] = []
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var showFiles = false
+    @State private var errorMessage: String?
 
     struct Picked: Identifiable {
         let id = UUID()
@@ -24,10 +25,6 @@ struct ImportView: View {
 
     private var mode: OutputMode {
         OutputMode(rawValue: modeRaw) ?? .image
-    }
-
-    private var canStart: Bool {
-        !picked.isEmpty
     }
 
     var body: some View {
@@ -52,14 +49,20 @@ struct ImportView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("开始") { start() }
                         .fontWeight(.semibold)
-                        .disabled(!canStart)
+                        .disabled(picked.isEmpty)
                 }
             }
-            .fileImporter(isPresented: $showFiles, allowedContentTypes: [UTType.pdf, UTType.image]) { result in
+            .fileImporter(isPresented: $showFiles, allowedContentTypes: [UTType.item], allowsMultipleSelection: true) { result in
                 handleImport(result)
             }
             .onChange(of: photoItems) { _, items in
                 loadPhotos(items)
+            }
+            .alert("无法导入", isPresented: Binding(get: { errorMessage != nil },
+                                            set: { if !$0 { errorMessage = nil } })) {
+                Button("知道了", role: .cancel) { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
             }
         }
     }
@@ -89,6 +92,10 @@ struct ImportView: View {
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
+
+                Text("支持 PDF、JPG、PNG、HEIC。Word 文档请先导出 PDF 再导入。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
 
                 if !picked.isEmpty {
                     VStack(spacing: 6) {
@@ -134,38 +141,10 @@ struct ImportView: View {
                 field("区县", text: $meta.qu, placeholder: "南开区")
                 field("学校（可空）", text: $meta.school, placeholder: "可选")
 
-                HStack {
-                    Text("年级").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Picker("年级", selection: $meta.nianji) {
-                        ForEach(optionsNianji, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                }
-                HStack {
-                    Text("学期").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Picker("学期", selection: $meta.xueqi) {
-                        ForEach(optionsXueqi, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                }
-                HStack {
-                    Text("类型").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Picker("类型", selection: $meta.leixing) {
-                        ForEach(optionsLeixing, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                }
-                HStack {
-                    Text("学科").font(.caption).foregroundStyle(.secondary)
-                    Spacer()
-                    Picker("学科", selection: $meta.xueke) {
-                        ForEach(optionsXueke, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                }
+                menuRow(title: "年级", value: $meta.nianji, options: optionsNianji)
+                menuRow(title: "学期", value: $meta.xueqi, options: optionsXueqi)
+                menuRow(title: "类型", value: $meta.leixing, options: optionsLeixing)
+                menuRow(title: "学科", value: $meta.xueke, options: optionsXueke)
 
                 HStack {
                     Text("预览名称").font(.caption).foregroundStyle(.secondary)
@@ -189,6 +168,19 @@ struct ImportView: View {
             TextField(placeholder, text: text)
                 .font(.subheadline)
                 .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func menuRow(title: String, value: Binding<String>, options: [String]) -> some View {
+        HStack {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Picker(title, selection: value) {
+                ForEach(options, id: \.self) { item in
+                    Text(item).tag(item)
+                }
+            }
+            .pickerStyle(.menu)
         }
     }
 
@@ -219,10 +211,6 @@ struct ImportView: View {
                         .font(.caption)
                 }
 
-                Text("识别语言：" + languages)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-
                 Text("全部在本机完成 · 不上传、不联网")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -232,12 +220,36 @@ struct ImportView: View {
 
     // MARK: 动作
 
-    private func handleImport(_ result: Result<URL, Error>) {
-        guard case .success(let url) = result else { return }
-        let scoped = url.startAccessingSecurityScopedResource()
-        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url) else { return }
-        picked.append(Picked(name: url.lastPathComponent, data: data))
+    private func handleImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            var failed: [String] = []
+            for url in urls {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                guard let data = try? Data(contentsOf: url) else {
+                    failed.append(url.lastPathComponent)
+                    continue
+                }
+                guard isSupported(data: data, name: url.lastPathComponent) else {
+                    failed.append(url.lastPathComponent)
+                    continue
+                }
+                picked.append(Picked(name: url.lastPathComponent, data: data))
+            }
+            if !failed.isEmpty {
+                errorMessage = "下面这些文件没能导入（目前只支持 PDF 与图片，Word 请先导出 PDF）：" + failed.joined(separator: "、")
+            }
+        case .failure(let error):
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func isSupported(data: Data, name: String) -> Bool {
+        if PDFDocumentCheck.isPDF(data: data) { return true }
+        if UIImage(data: data) != nil { return true }
+        let ext = (name as NSString).pathExtension.lowercased()
+        return ext == "pdf" || ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "heic"
     }
 
     private func loadPhotos(_ items: [PhotosPickerItem]) {
@@ -260,13 +272,12 @@ struct ImportView: View {
 
     private func start() {
         let payloads = picked.map { (name: $0.name, data: $0.data) }
-        let languagesList = parseLanguages(languages)
         store.create(files: payloads,
                      meta: meta,
                      mode: mode,
                      enhance: enhance,
                      maxPages: maxPages,
-                     languages: languagesList)
+                     languages: parseLanguages(languages))
         dismiss()
     }
 
@@ -291,4 +302,14 @@ struct ImportView: View {
     private var optionsXueqi: [String] { ["上学期", "下学期"] }
     private var optionsLeixing: [String] { ["月考", "期中", "期末", "一模", "二模", "模拟", "单元测试"] }
     private var optionsXueke: [String] { ["语文", "数学", "英语", "物理", "化学", "生物", "政治", "历史", "地理"] }
+}
+
+// PDF 文件头探测（避免引入 PDFKit 也能判断）
+enum PDFDocumentCheck {
+    static func isPDF(data: Data) -> Bool {
+        guard data.count > 4 else { return false }
+        let head = data.prefix(5)
+        let text = String(data: head, encoding: .ascii) ?? ""
+        return text.hasPrefix("%PDF")
+    }
 }
