@@ -10,6 +10,7 @@ settings:
     SWIFT_VERSION: "5.9"
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
 
 targets:
   ShijuanGongfang:
@@ -38,6 +39,17 @@ targets:
           NSAllowsArbitraryLoads: true
         NSCameraUsageDescription: 拍摄试卷用于识别
         NSPhotoLibraryUsageDescription: 从相册选择试卷图片
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: PDF
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - com.adobe.pdf
+          - CFBundleTypeName: Image
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.image
 
 schemes:
   ShijuanGongfang:
