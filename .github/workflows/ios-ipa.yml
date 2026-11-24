@@ -20,6 +20,14 @@ jobs:
         continue-on-error: true
         uses: actions/checkout@v4
 
+      - name: App icon
+        continue-on-error: true
+        run: |
+          mkdir -p ios/ShijuanGongfang/Assets.xcassets/AppIcon.appiconset
+          curl -fsSL "https://aka.doubaocdn.com/s/3J2cf4dF6Z" -o ios/ShijuanGongfang/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+          file ios/ShijuanGongfang/Assets.xcassets/AppIcon.appiconset/icon-1024.png
+          ls -l ios/ShijuanGongfang/Assets.xcassets/AppIcon.appiconset
+
       - name: Show toolchain
         id: toolchain
         continue-on-error: true
@@ -71,6 +79,7 @@ jobs:
           rm -f 试卷工坊-unsigned.ipa
           zip -qry 试卷工坊-unsigned.ipa Payload
           ls -lh 试卷工坊-unsigned.ipa
+          ls -1 Payload/*.app | head -20
 
       - name: Upload artifact
         id: art
@@ -103,7 +112,6 @@ jobs:
           cp ios/xcodegen.log ci-logs/ 2>/dev/null
           cp ios/build.log ci-logs/ 2>/dev/null
           cp ios/试卷工坊-unsigned.ipa ci-logs/ 2>/dev/null
-          ls -la ci-logs
           git config user.name "ci-bot"
           git config user.email "ci@local"
           git checkout -B ci-logs
